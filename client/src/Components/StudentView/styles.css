@@ -1,0 +1,37 @@
+.studentview-heading {
+  margin-top: 5vh;
+  margin-bottom: 5vh;
+}
+
+.courses-table {
+  width: 50vw;
+}
+.courses-table td {
+  text-align: center;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.courses-table tr:nth-child(even) {
+  background-color: cornsilk;
+}
+
+.courses-table tr:nth-child(odd) {
+  background-color: whitesmoke;
+}
+
+.courses-table th {
+  border-color: black;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.courses-table tr:first-child {
+  border-bottom-color: black;
+}
+
+.course-student-list-fetch-button {
+  padding-left: 5px;
+  padding-right: 5px;
+}
