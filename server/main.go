@@ -1,7 +1,7 @@
 package main
 
 import (
-
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,16 +12,15 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
+	"github.com/lib/pq"
 )
 
-type course struct {
-	Name      string   `json:Name`
-	Code      string   `json:Code`
-	StartSeg  int      `json:StartSeg`
-	EndSeg    int      `json:EndSeg`
-	Exams     []string `json:Exams`
-	Students  []string `json:Students`
-	Conflicts []string `json:Conflicts`
+type Course struct {
+	Instructor string   `json:Instructor`
+	Code       string   `json:Code`
+	Name       string   `json:Name`
+	Conflicts  []string `json:Courses`
+	Students   []string `json:Students`
 }
 
 type student struct {
@@ -36,15 +35,15 @@ type StudentArray struct {
 
 var StudentData StudentArray
 
-func CreateCourseFile(hello course) int {
-	courseFile, err := os.OpenFile("CS1353"+".json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Println("Error creating course file")
-	}
-	fmt.Fprintf(courseFile, "Course")
-	return 1
-}
+var db *sql.DB
 
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "your_postgres_user"
+	password = "your_postgres_password"
+	dbname   = "your_postgres_db"
+)
 
 func StudentCourseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -140,7 +139,79 @@ func init_data() error {
 	return nil
 }
 
+func CourseHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	course_name := r.URL.Path[len("/api/getCourseDetails/"):]
+	var CourseQuery Course
+
+	err := db.QueryRow("SELECT name,course_code,instructor_name,students,conflict_courses FROM courses WHERE course_code = $1", course_name).Scan(
+		&CourseQuery.Name, &CourseQuery.Code, &CourseQuery.Instructor, pq.Array(&CourseQuery.Students), pq.Array(&CourseQuery.Conflicts))
+
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		log.Println("Error in SQL Query")
+	}
+
+	course_json, err := json.Marshal(CourseQuery)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error in encoding into JSON")
+
+	} else {
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(course_json)
+	}
+}
+
+func StudentHandler(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
+	var StudentQuery student
+	Roll := r.URL.Path[len("/api/student/getCourses/"):]
+	fmt.Println(Roll)
+	log.Println(Roll)
+	err := db.QueryRow("SELECT * FROM students WHERE roll_no = $1", Roll).Scan(&StudentQuery.RollNo, &StudentQuery.Name, pq.Array(&StudentQuery.Courses))
+
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusNotFound)
+		log.Println("Error in SQL Query")
+	}
+
+	student_json, err := json.Marshal(StudentQuery)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error in encoding into JSON")
+
+	} else {
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(student_json)
+	}
+}
+
 func main() {
+
+	///Initialize DataBase
+	init_data()
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+	var err error
+	db, err = sql.Open("postgres", psqlInfo)
+	if err != nil {
+		log.Println(err.Error())
+		panic(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		log.Println(err)
+		panic(err)
+	}
 
 	r := chi.NewRouter()
 
@@ -156,15 +227,34 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	init_data()
-	r.Get("/api/student/getCourses/{RollNo}", StudentCourseHandler)
-	r.Get("/api/getCourseDetails/{course}", InstructorCourseHandler)
+	r.Get("/api/student/getCourses/{RollNo}", StudentHandler)
+	r.Get("/api/getCourseDetails/{course}", CourseHandler)
 	r.Get("/api/instructor/getCourseList/", InstructorListHandler)
 	//r.Get("/api/student/getCourses/{course}",StudentHandler)
-	//r.Patch("/api")
 	//http.HandleFunc("/api/instructor/getCourses/", InstructorCourseHandler)
 	//http.HandleFunc("/api/instructor/conflicts/",FetchConflictHandler)
 
 	log.Fatal(http.ListenAndServe(":8080", r))
 	fmt.Printf("\n")
+}
+
+func InitDB(db *sql.DB) {
+
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+
+	var err error
+
+	db, err = sql.Open("postgres", psqlInfo)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		panic(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+
 }
